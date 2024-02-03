@@ -3,7 +3,7 @@
 //
 #include <napi.h>
 #include "TwainSession.h"
-
+#include <fstream>
 TW_UINT16 message;
 
 TW_UINT16 dsmCallback(pTW_IDENTITY pOrigin, pTW_IDENTITY pDest, TW_UINT32 uiDG, TW_UINT16 uiDAT, TW_UINT16 uiMSG, TW_MEMREF pData) {
@@ -189,7 +189,7 @@ TW_UINT16 TwainSession::getSources() {
         std::cout << "getSources :: You need to open the DSM first." << state << std::endl;
         return rc;
     }
-    
+
     // assert(true == sources.empty());
     if(true != sources.empty()){
         sources.clear();
@@ -399,7 +399,7 @@ TW_UINT16 TwainSession::enableDS() {
     if (message == MSG_XFERREADY) {
         state = 6;
     }
-    
+
     return rc;
 };
 
@@ -445,30 +445,30 @@ void TwainSession::initCap() {
     }
     GlobalFree((HANDLE)pixelTypeCap.hContainer);
 
-    
+
     TW_CAPABILITY xferCountCap;
     xferCountCap.Cap = CAP_XFERCOUNT;
     xferCountCap.ConType = TWON_ONEVALUE;
     xferCountCap.hContainer = GlobalAlloc(GHND, sizeof(TW_ONEVALUE));
-    
+
     pTW_ONEVALUE pXferCountVal = (pTW_ONEVALUE)GlobalLock(xferCountCap.hContainer);
-    pXferCountVal->ItemType = TWTY_INT16;  
+    pXferCountVal->ItemType = TWTY_INT16;
     *(TW_INT16 *)&pXferCountVal->Item = 1;  // Set transfer count to one
 
     GlobalUnlock(xferCountCap.hContainer);
-    
+
     rc = entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF)&xferCountCap, pSource);
-    if (rc != TWRC_SUCCESS) 
+    if (rc != TWRC_SUCCESS)
     {
         std::cout << "Error setting transfer count ------------------------" << rc << std::endl;
     }
-    
+
     GlobalFree((HANDLE)xferCountCap.hContainer);
 
 
     TW_FIX32 fix32;
- 
-   
+
+
     fix32.Whole = 300;
     fix32.Frac = 0;
 
@@ -487,7 +487,7 @@ void TwainSession::initCap() {
     entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF) &xResCap,pSource);
     GlobalFree((HANDLE)xResCap.hContainer);
 
- 
+
     TW_CAPABILITY yResCap;
     yResCap.Cap = ICAP_YRESOLUTION;
     yResCap.ConType = TWON_ONEVALUE;
@@ -587,58 +587,57 @@ void TwainSession::transferNative() {
 }
 
 void TwainSession::transferFile(TW_UINT16 fileFormat, std::string fileName) {
-     std::cout << "starting a TWSX_FILE transfer..." << std::endl;
-    std::string ext = convertImageFileFormatToExt(fileFormat);
-    std::cout << ext << std::endl;
-
+    std::cout << "starting a TWSX_NATIVE transfer..." << std::endl;
     bool bPendingXfers = true;
-    TW_UINT16 rc = TWRC_SUCCESS;
-    TW_SETUPFILEXFER fileXfer;
-    memset(&fileXfer, 0, sizeof(fileXfer));
-    std::cout << "Test::" << fileXfer.Format << std::endl;
-    fileXfer.Format = fileFormat;
-    strcpy(fileXfer.FileName, (fileName).c_str());
-    
-//    TW_STR255 str;
-//    snprintf((char *)fileXfer.FileName, str);
-    // fileXfer.FileName[0] = 'i';
-    // fileXfer.FileName[1] = 'm';
-    // fileXfer.FileName[2] = '.';
-    // fileXfer.FileName[3] = 't';
-    // fileXfer.FileName[4] = 'i';
-    // fileXfer.FileName[5] = 'f';
-    // fileXfer.FileName[6] = 'f';
+    TW_UINT16 rc = TWRC_FAILURE;
 
     while (bPendingXfers) {
-        rc = entry(DG_CONTROL, DAT_SETUPFILEXFER, MSG_SET, (TW_MEMREF) &fileXfer, pSource);
-        if (rc != TWRC_SUCCESS) {
-            std::cerr << "Error while trying to setup the file transfer" << std::endl;
-            break;
-        }
+        TW_MEMREF hImg = NULL;
 
-        rc = entry(DG_IMAGE, DAT_IMAGEFILEXFER, MSG_GET, NULL, pSource);
-        if (rc == TWRC_XFERDONE) {
-            // rc = entry(DG_CONTROL, DAT_SETUPFILEXFER, MSG_GETDEFAULT, (TW_MEMREF) &fileXfer, pSource);
-            std::cout << "file saved..." << fileXfer.FileName << std::endl;
-            std::cout << "Checking to see if there are more images to transfer..." << std::endl;
-            TW_PENDINGXFERS pendXfers;
-            memset(&pendXfers, 0, sizeof(pendXfers));
-            rc = entry(DG_CONTROL, DAT_PENDINGXFERS, MSG_ENDXFER, (TW_MEMREF) &pendXfers, pSource);
+        rc = entry(DG_IMAGE, DAT_IMAGENATIVEXFER, MSG_GET, (TW_MEMREF) &hImg, pSource);
 
-            if (rc == TWRC_SUCCESS) {
-                if (pendXfers.Count == 0) {
+        switch (rc) {
+            case TWRC_XFERDONE:
+            {
+                BITMAPFILEHEADER bmfHeader = {0};
+                bmfHeader.bfType = ('M' << 8) | 'B';
+                bmfHeader.bfSize = GlobalSize((HGLOBAL)hImg) + sizeof(BITMAPFILEHEADER);
+                bmfHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+
+                LPVOID lpDIB = GlobalLock((HGLOBAL)hImg);
+
+                std::ofstream outFile(fileName.c_str(), std::ios::binary);
+
+                outFile.write((char*)&bmfHeader, sizeof(BITMAPFILEHEADER));
+                outFile.write((char*)lpDIB, GlobalSize((HGLOBAL)hImg));
+
+                outFile.close();
+                GlobalUnlock((HGLOBAL)hImg);
+                GlobalFree((HGLOBAL)hImg);
+
+                TW_PENDINGXFERS pendXfers;
+                rc = entry(DG_CONTROL, DAT_PENDINGXFERS, MSG_ENDXFER, (TW_MEMREF) &pendXfers, pSource);
+
+                if (rc == TWRC_SUCCESS) {
+                    std::cout << "Remaining images to transfer" << pendXfers.Count << std::endl;
+                    if (pendXfers.Count == 0) {
+                        bPendingXfers = false;
+                    }
+                } else {
                     bPendingXfers = false;
+                    std::cerr << "Failed to properly end the transfer" << std::endl;
                 }
-            } else {
-                std::cerr << "Failed to properly end the transfer" << std::endl;
-                bPendingXfers = false;
+                break;
             }
-        } else if (rc == TWRC_CANCEL) {
-            std::cerr << "Cancel to transfer image" << std::endl;
-            break;
-        } else if (rc == TWRC_FAILURE) {
-            std::cerr << "Failed to transfer image" << std::endl;
-            break;
+            case TWRC_CANCEL:
+                bPendingXfers = false;
+                std::cout << "Cancel transfer image" << std::endl;
+                break;
+            case TWRC_FAILURE:
+                bPendingXfers = false;
+                std::cout << "Failed transfer image" << std::endl;
+                GlobalFree((HGLOBAL)hImg);
+                break;
         }
     }
     state = 5;
