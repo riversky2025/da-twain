@@ -10,7 +10,6 @@
 #include <string>
 
 #include "twain/Common.h"
-
 #ifdef TWH_CMP_GNU
 #include <dlfcn.h>
 #endif
@@ -109,7 +108,7 @@ private:
     TW_STATUS status;
     TW_IMAGEINFO imageInfo;
     TW_USERINTERFACE ui;
-
+    void initCap();
     void transferNative();
     void transferFile(TW_UINT16 fileFormat,std::string);
     void transferMemory();

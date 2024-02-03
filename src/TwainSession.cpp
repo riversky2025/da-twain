@@ -227,6 +227,7 @@ TW_UINT16 TwainSession::openDS() {
     std::cout << "openDS:rc:::::" << rc << std::endl;
     if (rc == TWRC_SUCCESS) {
         state = 4;
+        initCap();
     }
     return rc;
 }
@@ -246,6 +247,7 @@ TW_UINT16 TwainSession::openDS(std::string name) {
             switch (rc) {
                 case TWRC_SUCCESS:
                     state = 4;
+                    initCap();
                     break;
                 case TWRC_FAILURE:
                     std::cerr << "Failed to get the data source info!" << std::endl;
@@ -349,7 +351,10 @@ TW_UINT16 TwainSession::setCap(TW_UINT16 Cap, const int value, TW_UINT16 type) {
     }
 
     rc = entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF) &cap);
-
+    if (rc != TWRC_SUCCESS) {
+        unlockMemory(cap.hContainer);
+        freeMemory(cap.hContainer);
+    }
     return rc;
 }
 
@@ -394,6 +399,7 @@ TW_UINT16 TwainSession::enableDS() {
     if (message == MSG_XFERREADY) {
         state = 6;
     }
+    
     return rc;
 };
 
@@ -424,13 +430,83 @@ TW_UINT16 TwainSession::getImageInfo() {
     }
     return rc;
 }
+void TwainSession::initCap() {
+    TW_CAPABILITY pixelTypeCap;
+    pixelTypeCap.Cap = ICAP_PIXELTYPE;
+    pixelTypeCap.ConType = TWON_ONEVALUE;
+    pixelTypeCap.hContainer = GlobalAlloc(GHND, sizeof(TW_ONEVALUE));
+    pTW_ONEVALUE pPixelTypeVal = (pTW_ONEVALUE)GlobalLock(pixelTypeCap.hContainer);
+    pPixelTypeVal->ItemType = TWTY_UINT16;
+    *(TW_UINT16 *)&pPixelTypeVal->Item = TWPT_RGB;
+    GlobalUnlock(pixelTypeCap.hContainer);
+    auto rc = entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF)&pixelTypeCap, pSource);
+    if (rc != TWRC_SUCCESS) {
+        std::cout << "Error setting pixel type ------------------------" << rc << std::endl;
+    }
+    GlobalFree((HANDLE)pixelTypeCap.hContainer);
 
+    
+    TW_CAPABILITY xferCountCap;
+    xferCountCap.Cap = CAP_XFERCOUNT;
+    xferCountCap.ConType = TWON_ONEVALUE;
+    xferCountCap.hContainer = GlobalAlloc(GHND, sizeof(TW_ONEVALUE));
+    
+    pTW_ONEVALUE pXferCountVal = (pTW_ONEVALUE)GlobalLock(xferCountCap.hContainer);
+    pXferCountVal->ItemType = TWTY_INT16;  
+    *(TW_INT16 *)&pXferCountVal->Item = 1;  // Set transfer count to one
+
+    GlobalUnlock(xferCountCap.hContainer);
+    
+    rc = entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF)&xferCountCap, pSource);
+    if (rc != TWRC_SUCCESS) 
+    {
+        std::cout << "Error setting transfer count ------------------------" << rc << std::endl;
+    }
+    
+    GlobalFree((HANDLE)xferCountCap.hContainer);
+
+
+    TW_FIX32 fix32;
+ 
+   
+    fix32.Whole = 300;
+    fix32.Frac = 0;
+
+
+    TW_CAPABILITY xResCap;
+    xResCap.Cap = ICAP_XRESOLUTION;
+    xResCap.ConType = TWON_ONEVALUE;
+    xResCap.hContainer = GlobalAlloc(GHND, sizeof(TW_ONEVALUE));
+
+    pTW_ONEVALUE pXVal = (pTW_ONEVALUE) GlobalLock(xResCap.hContainer);
+    pXVal->ItemType = TWTY_FIX32;
+    *(TW_UINT32 *)&pXVal->Item = *(TW_UINT32 *)&fix32;   // Set to 300DPI
+    GlobalUnlock(xResCap.hContainer);
+
+    // Call to the source (scanner) to set the capability goes here
+    entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF) &xResCap,pSource);
+    GlobalFree((HANDLE)xResCap.hContainer);
+
+ 
+    TW_CAPABILITY yResCap;
+    yResCap.Cap = ICAP_YRESOLUTION;
+    yResCap.ConType = TWON_ONEVALUE;
+    yResCap.hContainer = GlobalAlloc(GHND, sizeof(TW_ONEVALUE));
+
+    pTW_ONEVALUE pYVal = (pTW_ONEVALUE) GlobalLock(yResCap.hContainer);
+    pYVal->ItemType = TWTY_FIX32;
+    *(TW_UINT32 *)&pYVal->Item = *(TW_UINT32 *)&fix32;   // Set to 300DPI
+    GlobalUnlock(yResCap.hContainer);
+
+    // Call to the source (scanner) to set the capability goes here
+    entry( DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF) &yResCap,pSource);
+    GlobalFree((HANDLE)yResCap.hContainer);
+}
 TW_UINT16 TwainSession::scan(TW_UINT32 mech, std::string fileName) {
     if(state != 6) {
         std::cout << "A scan cannot be initiated unless we are in state 6" << std::endl;
         return TWRC_FAILURE;
     }
-
     TW_UINT16 rc = getImageInfo();
     if (TWRC_SUCCESS != rc) {
         return rc;
@@ -511,7 +587,7 @@ void TwainSession::transferNative() {
 }
 
 void TwainSession::transferFile(TW_UINT16 fileFormat, std::string fileName) {
-    std::cout << "starting a TWSX_FILE transfer..." << std::endl;
+     std::cout << "starting a TWSX_FILE transfer..." << std::endl;
     std::string ext = convertImageFileFormatToExt(fileFormat);
     std::cout << ext << std::endl;
 
@@ -521,7 +597,7 @@ void TwainSession::transferFile(TW_UINT16 fileFormat, std::string fileName) {
     memset(&fileXfer, 0, sizeof(fileXfer));
     std::cout << "Test::" << fileXfer.Format << std::endl;
     fileXfer.Format = fileFormat;
-    strcpy(fileXfer.FileName, (fileName + ext).c_str());
+    strcpy(fileXfer.FileName, (fileName).c_str());
     
 //    TW_STR255 str;
 //    snprintf((char *)fileXfer.FileName, str);
@@ -568,7 +644,6 @@ void TwainSession::transferFile(TW_UINT16 fileFormat, std::string fileName) {
     state = 5;
     return;
 }
-
 void TwainSession::transferMemory() {
     std::cout << "starting a TWSX_MEMORY transfer..." << std::endl;
     bool bPendingXfers = true;

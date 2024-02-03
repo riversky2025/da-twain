@@ -1,7 +1,7 @@
 {
-  "name": "node-twain",
-  "version": "0.0.16",
-  "description": "A TWAIN library for nodejs.",
+  "name": "da-twain",
+  "version": "1.1.0",
+  "description": "A TWAIN library for nodejs. clone by Luomusha ",
   "keywords": [
     "TWAIN",
     "node-twain",
@@ -14,12 +14,13 @@
   "types": "twain.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/luomusha/node-twain.git"
+    "url": "git+https://github.com/riversky2025/da-twain.git"
   },
   "scripts": {
     "start": "node-gyp configure build --debug",
     "tsc": "tsc -w",
-    "test": "jest --watch"
+    "test": "jest --watchAll",
+    "run": "node  scan.cjs"
   },
   "devDependencies": {
     "@types/bindings": "^1.5.1",
@@ -36,5 +37,6 @@
   "gypfile": true,
   "engines": {
     "node": "~10 >=10.20 || >=12.17"
-  }
+  },
+  "__npminstall_done": false
 }

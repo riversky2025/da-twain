@@ -1,4 +1,4 @@
-const { TwainSDK } = require("da-twain");
+const { TwainSDK } = require("node-twain");
 const ap = new TwainSDK({
     productName: "productName!",
     productFamily: "productFamily!",
@@ -11,7 +11,13 @@ const ap = new TwainSDK({
       info: "v0.0.1"
     }
   });
-const sources = ap.getDataSources();
+const scannDoc = (dpi, path) => {
+  // 打印dpi和path
+  console.log(dpi);
+  console.log(path);
+  try {
+    // 获取可用的扫描仪
+    const sources = ap.getDataSources();
     // 打印可用的扫描仪
     // console.log("Available Scanner:", sources);
     // 获取默认的扫描仪
@@ -26,11 +32,6 @@ const sources = ap.getDataSources();
 //     ap.setCapability(300);
     // 设置回调函数
     ap.setCallback();
-const scannDoc = (dpi, path) => {
-  // 打印dpi和path
-  console.log(dpi);
-  console.log(path);
-  try {
     // 扫描文档
     ap.scan(1, path);
   } catch (error) {
@@ -38,5 +39,4 @@ const scannDoc = (dpi, path) => {
     console.error("error", error);
   }
 };
-scannDoc(300, "./abc.jpg");
-scannDoc(300, "./abd.jpg");
+scannDoc(300, "e:/da/dat/abc.png");
