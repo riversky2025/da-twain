@@ -112,7 +112,7 @@ private:
     TW_USERINTERFACE ui;
     void initCap();
     void transferNative();
-    void transferFile(TW_UINT16 fileFormat,std::vector<std::string> images);
+    int transferFile(TW_UINT16 fileFormat,std::vector<std::string> images);
     void transferMemory();
 
     bool parseCapability(TW_CAPABILITY *pCap, TW_UINT32& val);

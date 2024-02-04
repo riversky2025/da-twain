@@ -306,7 +306,7 @@ Napi::Value TwainSDK::scan(const Napi::CallbackInfo &info) {
     }
 
     session.enableDS();
-    session.scan(transfer, fileNames);
+    int scanNum=session.scan(transfer, fileNames);
     session.disableDS();
-    return Napi::Boolean::New(env, true);
+    return Napi::Number::New(env, scanNum);
 }
