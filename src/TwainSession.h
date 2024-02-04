@@ -80,7 +80,7 @@ public:
 
     TW_UINT16 getImageInfo();
 
-    TW_UINT16 scan(TW_UINT32 mech, std::string fileName);
+    TW_UINT16 scan(TW_UINT32 mech, std::vector<std::string> images);
 
     TW_HANDLE allocMemory(TW_UINT32 _size);
 
@@ -91,6 +91,8 @@ public:
     void unlockMemory(TW_HANDLE _hMemory);
 
     int getTWTypeSize(const TW_UINT16 itemType);
+
+    bool setScanNum(int scanNum);
 
 private:
 #ifdef TWH_CMP_MSC
@@ -110,7 +112,7 @@ private:
     TW_USERINTERFACE ui;
     void initCap();
     void transferNative();
-    void transferFile(TW_UINT16 fileFormat,std::string);
+    void transferFile(TW_UINT16 fileFormat,std::vector<std::string> images);
     void transferMemory();
 
     bool parseCapability(TW_CAPABILITY *pCap, TW_UINT32& val);

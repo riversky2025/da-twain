@@ -189,7 +189,7 @@ TW_UINT16 TwainSession::getSources() {
         std::cout << "getSources :: You need to open the DSM first." << state << std::endl;
         return rc;
     }
-
+    
     // assert(true == sources.empty());
     if(true != sources.empty()){
         sources.clear();
@@ -399,7 +399,7 @@ TW_UINT16 TwainSession::enableDS() {
     if (message == MSG_XFERREADY) {
         state = 6;
     }
-
+    
     return rc;
 };
 
@@ -445,30 +445,30 @@ void TwainSession::initCap() {
     }
     GlobalFree((HANDLE)pixelTypeCap.hContainer);
 
+    
+    // TW_CAPABILITY xferCountCap;
+    // xferCountCap.Cap = CAP_XFERCOUNT;
+    // xferCountCap.ConType = TWON_ONEVALUE;
+    // xferCountCap.hContainer = GlobalAlloc(GHND, sizeof(TW_ONEVALUE));
+    
+    // pTW_ONEVALUE pXferCountVal = (pTW_ONEVALUE)GlobalLock(xferCountCap.hContainer);
+    // pXferCountVal->ItemType = TWTY_INT16;  
+    // *(TW_INT16 *)&pXferCountVal->Item = 1;  // Set transfer count to one
 
-    TW_CAPABILITY xferCountCap;
-    xferCountCap.Cap = CAP_XFERCOUNT;
-    xferCountCap.ConType = TWON_ONEVALUE;
-    xferCountCap.hContainer = GlobalAlloc(GHND, sizeof(TW_ONEVALUE));
-
-    pTW_ONEVALUE pXferCountVal = (pTW_ONEVALUE)GlobalLock(xferCountCap.hContainer);
-    pXferCountVal->ItemType = TWTY_INT16;
-    *(TW_INT16 *)&pXferCountVal->Item = 1;  // Set transfer count to one
-
-    GlobalUnlock(xferCountCap.hContainer);
-
-    rc = entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF)&xferCountCap, pSource);
-    if (rc != TWRC_SUCCESS)
-    {
-        std::cout << "Error setting transfer count ------------------------" << rc << std::endl;
-    }
-
-    GlobalFree((HANDLE)xferCountCap.hContainer);
+    // GlobalUnlock(xferCountCap.hContainer);
+    
+    // rc = entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF)&xferCountCap, pSource);
+    // if (rc != TWRC_SUCCESS) 
+    // {
+    //     std::cout << "Error setting transfer count ------------------------" << rc << std::endl;
+    // }
+    
+    // GlobalFree((HANDLE)xferCountCap.hContainer);
 
 
     TW_FIX32 fix32;
-
-
+ 
+   
     fix32.Whole = 300;
     fix32.Frac = 0;
 
@@ -487,7 +487,7 @@ void TwainSession::initCap() {
     entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF) &xResCap,pSource);
     GlobalFree((HANDLE)xResCap.hContainer);
 
-
+ 
     TW_CAPABILITY yResCap;
     yResCap.Cap = ICAP_YRESOLUTION;
     yResCap.ConType = TWON_ONEVALUE;
@@ -502,7 +502,11 @@ void TwainSession::initCap() {
     entry( DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF) &yResCap,pSource);
     GlobalFree((HANDLE)yResCap.hContainer);
 }
-TW_UINT16 TwainSession::scan(TW_UINT32 mech, std::string fileName) {
+TW_UINT16 TwainSession::scan(TW_UINT32 mech,  std::vector<std::string> fileNames) {
+    if(!setScanNum(fileNames.size())){
+        std::cout << "Could not set scan number" << std::endl;
+        return TWRC_FAILURE;
+    }
     if(state != 6) {
         std::cout << "A scan cannot be initiated unless we are in state 6" << std::endl;
         return TWRC_FAILURE;
@@ -525,7 +529,7 @@ TW_UINT16 TwainSession::scan(TW_UINT32 mech, std::string fileName) {
             if( rc == TWRC_SUCCESS){
                 pTW_ONEVALUE pEnum = (pTW_ONEVALUE)lockMemory(cap.hContainer);
                 std::cout << pEnum->Item << std::endl;
-                transferFile(pEnum->Item, fileName);
+                transferFile(pEnum->Item, fileNames);
             }
             break;
         }
@@ -585,12 +589,35 @@ void TwainSession::transferNative() {
     state = 5;
     return;
 }
+bool TwainSession::setScanNum(int scanNum){
+    disableDS();
+    TW_CAPABILITY xferCountCap;
+    xferCountCap.Cap = CAP_XFERCOUNT;
+    xferCountCap.ConType = TWON_ONEVALUE;
+    xferCountCap.hContainer = GlobalAlloc(GHND, sizeof(TW_ONEVALUE));
+    
+    pTW_ONEVALUE pXferCountVal = (pTW_ONEVALUE)GlobalLock(xferCountCap.hContainer);
+    pXferCountVal->ItemType = TWTY_INT16;  
+    *(TW_INT16 *)&pXferCountVal->Item = scanNum;  // Set transfer count to one
 
-void TwainSession::transferFile(TW_UINT16 fileFormat, std::string fileName) {
+    GlobalUnlock(xferCountCap.hContainer);
+    
+    auto rc = entry(DG_CONTROL, DAT_CAPABILITY, MSG_SET, (TW_MEMREF)&xferCountCap, pSource);
+    GlobalFree((HANDLE)xferCountCap.hContainer);
+    enableDS();
+    if (rc != TWRC_SUCCESS) 
+    {
+        return false;
+    }else{
+        return true;
+    }
+}
+void TwainSession::transferFile(TW_UINT16 fileFormat, std::vector<std::string> images) {
     std::cout << "starting a TWSX_NATIVE transfer..." << std::endl;
     bool bPendingXfers = true;
     TW_UINT16 rc = TWRC_FAILURE;
-
+    int index=0;
+    std::string fileName=images[index];
     while (bPendingXfers) {
         TW_MEMREF hImg = NULL;
 
@@ -619,9 +646,16 @@ void TwainSession::transferFile(TW_UINT16 fileFormat, std::string fileName) {
                 rc = entry(DG_CONTROL, DAT_PENDINGXFERS, MSG_ENDXFER, (TW_MEMREF) &pendXfers, pSource);
 
                 if (rc == TWRC_SUCCESS) {
-                    std::cout << "Remaining images to transfer" << pendXfers.Count << std::endl;
-                    if (pendXfers.Count == 0) {
+                    if (++index < images.size()){
+                        fileName=images[index];
+                        std::cout << "Remaining images to transfer" << pendXfers.Count << std::endl;
+                        if (pendXfers.Count == 0) {
+                            bPendingXfers = false;
+                        }
+                    }else{
                         bPendingXfers = false;
+                        disableDS();
+                        enableDS();
                     }
                 } else {
                     bPendingXfers = false;

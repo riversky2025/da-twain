@@ -296,10 +296,17 @@ Napi::Value TwainSDK::enableDataSource(const Napi::CallbackInfo &info) {
 Napi::Value TwainSDK::scan(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
     TW_UINT16 transfer = info[0].As<Napi::Number>().Uint32Value();
-    std::string fileName = info[1].As<Napi::String>().Utf8Value();
+    std::vector<std::string> fileNames;
+
+    // 获取传入的字符串列表参数
+    Napi::Array fileList = info[1].As<Napi::Array>();
+    for (uint32_t i = 0; i < fileList.Length(); i++) {
+        std::string fileName = fileList.Get(i).As<Napi::String>().Utf8Value();
+        fileNames.push_back(fileName);
+    }
 
     session.enableDS();
-    session.scan(transfer, fileName);
+    session.scan(transfer, fileNames);
     session.disableDS();
     return Napi::Boolean::New(env, true);
 }
